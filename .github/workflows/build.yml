@@ -80,6 +80,7 @@ jobs:
         run: |
           mkdir -p _out
           docker run --rm --privileged \
+            -v /dev:/dev \
             -v $PWD/_out:/out \
             -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} metal --arch amd64 \
@@ -90,6 +91,7 @@ jobs:
       - name: Build nocloud-amd64 ISO
         run: |
           docker run --rm --privileged \
+            -v /dev:/dev \
             -v $PWD/_out:/out \
             -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} nocloud --arch amd64 \
@@ -100,6 +102,7 @@ jobs:
       - name: Build installer image
         run: |
           docker run --rm --privileged \
+            -v /dev:/dev \
             -v $PWD/_out:/out \
             -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} installer \
