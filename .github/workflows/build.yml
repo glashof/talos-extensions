@@ -76,19 +76,19 @@ jobs:
           echo "Using qemu-guest-agent version: ${QEMU_VERSION}"
           echo "version=${QEMU_VERSION}" >> "$GITHUB_OUTPUT"
 
-      - name: Build metal-amd64 ISO
+      - name: Build metal ISO
         run: |
           mkdir -p _out
           docker run --rm --privileged \
             -v /dev:/dev \
             -v $PWD/_out:/out \
             -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
-            ghcr.io/siderolabs/imager:${{ matrix.talos_version }} metal --arch amd64 \
+            ghcr.io/siderolabs/imager:${{ matrix.talos_version }} iso --arch amd64 \
             --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
-          mv _out/metal-amd64.iso _out/talos-${{ matrix.talos_version }}-netbird-metal-amd64.iso
+          mv _out/metal-amd64.iso _out/talos-${{ matrix.talos_version }}-netbird-amd64.iso
 
-      - name: Build nocloud-amd64 ISO
+      - name: Build nocloud disk image
         run: |
           docker run --rm --privileged \
             -v /dev:/dev \
@@ -97,12 +97,11 @@ jobs:
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} nocloud --arch amd64 \
             --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
-          mv _out/nocloud-amd64.iso _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.iso
+          mv _out/nocloud-amd64.raw.zst _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst
 
       - name: Build installer image
         run: |
           docker run --rm --privileged \
-            -v /dev:/dev \
             -v $PWD/_out:/out \
             -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} installer \
@@ -113,10 +112,10 @@ jobs:
         run: |
           crane push _out/installer-amd64.tar ghcr.io/glashof/talos-installer-netbird:${{ matrix.talos_version }}
 
-      - name: Upload ISOs as release artifacts
+      - name: Upload release artifacts
         if: startsWith(github.ref, 'refs/tags/netbird/v')
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            _out/talos-${{ matrix.talos_version }}-netbird-metal-amd64.iso
-            _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.iso
+            _out/talos-${{ matrix.talos_version }}-netbird-amd64.iso
+            _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst
