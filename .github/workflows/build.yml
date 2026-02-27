@@ -99,6 +99,12 @@ jobs:
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
           mv _out/nocloud-amd64.raw.zst _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst
 
+      - name: Convert nocloud image to qcow2
+        run: |
+          zstd -d _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst -o _out/nocloud-amd64.raw
+          qemu-img convert -f raw -O qcow2 _out/nocloud-amd64.raw _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.qcow2
+          rm _out/nocloud-amd64.raw
+
       - name: Build installer image
         run: |
           docker run --rm --privileged \
@@ -119,3 +125,4 @@ jobs:
           files: |
             _out/talos-${{ matrix.talos_version }}-netbird-amd64.iso
             _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst
+            _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.qcow2
