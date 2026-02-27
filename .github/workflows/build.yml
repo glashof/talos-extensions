@@ -101,6 +101,7 @@ jobs:
 
       - name: Convert nocloud image to qcow2
         run: |
+          sudo apt-get install -y --no-install-recommends qemu-utils
           zstd -d _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.raw.zst -o _out/nocloud-amd64.raw
           qemu-img convert -f raw -O qcow2 _out/nocloud-amd64.raw _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.qcow2
           rm _out/nocloud-amd64.raw
