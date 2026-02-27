@@ -1,0 +1,108 @@
+name: Build Talos Netbird Extension
+
+on:
+  push:
+    branches: [main]
+    paths: ['netbird/**']
+    tags: ['netbird/v*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  NETBIRD_IMAGE: ghcr.io/glashof/talos-netbird
+  NETBIRD_VERSION: "0.66.0"
+
+jobs:
+  build-extension:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push extension image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: netbird/Dockerfile
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }}
+            ${{ env.NETBIRD_IMAGE }}:latest
+
+  build-isos:
+    needs: build-extension
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+    strategy:
+      matrix:
+        talos_version: ['v1.12.4']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install crane
+        run: |
+          VERSION=$(curl -s https://api.github.com/repos/google/go-containerregistry/releases/latest | jq -r .tag_name)
+          curl -sL "https://github.com/google/go-containerregistry/releases/download/${VERSION}/go-containerregistry_Linux_x86_64.tar.gz" | tar xz -C /usr/local/bin crane
+
+      - name: Discover qemu-guest-agent version
+        id: qemu-version
+        run: |
+          QEMU_VERSION=$(docker run --rm ghcr.io/siderolabs/imager:${{ matrix.talos_version }} list-extensions 2>/dev/null | grep qemu-guest-agent | awk '{print $2}' || echo "latest")
+          echo "version=${QEMU_VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Build metal-amd64 ISO
+        run: |
+          mkdir -p _out
+          docker run --rm --privileged -v $PWD/_out:/out \
+            ghcr.io/siderolabs/imager:${{ matrix.talos_version }} metal --arch amd64 \
+            --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
+            --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
+          mv _out/metal-amd64.iso _out/talos-${{ matrix.talos_version }}-netbird-metal-amd64.iso
+
+      - name: Build nocloud-amd64 ISO
+        run: |
+          docker run --rm --privileged -v $PWD/_out:/out \
+            ghcr.io/siderolabs/imager:${{ matrix.talos_version }} nocloud --arch amd64 \
+            --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
+            --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
+          mv _out/nocloud-amd64.iso _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.iso
+
+      - name: Build installer image
+        run: |
+          docker run --rm --privileged -v $PWD/_out:/out \
+            ghcr.io/siderolabs/imager:${{ matrix.talos_version }} installer \
+            --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
+            --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
+
+      - name: Push installer OCI image
+        run: |
+          crane push _out/installer-amd64.tar ghcr.io/glashof/talos-installer-netbird:${{ matrix.talos_version }}
+
+      - name: Upload ISOs as release artifacts
+        if: startsWith(github.ref, 'refs/tags/netbird/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            _out/talos-${{ matrix.talos_version }}-netbird-metal-amd64.iso
+            _out/talos-${{ matrix.talos_version }}-netbird-nocloud-amd64.iso

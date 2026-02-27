@@ -1,0 +1,9 @@
+version: v1alpha1
+metadata:
+  name: netbird
+  version: 0.66.0
+  author: glashof
+  description: "Netbird WireGuard mesh networking client (custom build, fixes foreground login bug netbirdio/netbird#5218)"
+  compatibility:
+    talos:
+      version: ">= v1.5.0"
