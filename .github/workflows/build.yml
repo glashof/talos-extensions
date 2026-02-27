@@ -68,13 +68,20 @@ jobs:
       - name: Discover qemu-guest-agent version
         id: qemu-version
         run: |
-          QEMU_VERSION=$(docker run --rm ghcr.io/siderolabs/imager:${{ matrix.talos_version }} list-extensions 2>/dev/null | grep qemu-guest-agent | awk '{print $2}' || echo "latest")
+          QEMU_VERSION=$(docker run --rm ghcr.io/siderolabs/imager:${{ matrix.talos_version }} list-extensions 2>/dev/null | grep qemu-guest-agent | awk '{print $2}')
+          if [ -z "$QEMU_VERSION" ]; then
+            echo "Failed to discover qemu-guest-agent version, falling back to crane"
+            QEMU_VERSION=$(crane ls ghcr.io/siderolabs/qemu-guest-agent | grep -E '^[0-9]+\.' | sort -V | tail -1)
+          fi
+          echo "Using qemu-guest-agent version: ${QEMU_VERSION}"
           echo "version=${QEMU_VERSION}" >> "$GITHUB_OUTPUT"
 
       - name: Build metal-amd64 ISO
         run: |
           mkdir -p _out
-          docker run --rm --privileged -v $PWD/_out:/out \
+          docker run --rm --privileged \
+            -v $PWD/_out:/out \
+            -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} metal --arch amd64 \
             --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
@@ -82,7 +89,9 @@ jobs:
 
       - name: Build nocloud-amd64 ISO
         run: |
-          docker run --rm --privileged -v $PWD/_out:/out \
+          docker run --rm --privileged \
+            -v $PWD/_out:/out \
+            -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} nocloud --arch amd64 \
             --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
@@ -90,7 +99,9 @@ jobs:
 
       - name: Build installer image
         run: |
-          docker run --rm --privileged -v $PWD/_out:/out \
+          docker run --rm --privileged \
+            -v $PWD/_out:/out \
+            -v $HOME/.docker/config.json:/root/.docker/config.json:ro \
             ghcr.io/siderolabs/imager:${{ matrix.talos_version }} installer \
             --system-extension-image ${{ env.NETBIRD_IMAGE }}:${{ env.NETBIRD_VERSION }} \
             --system-extension-image ghcr.io/siderolabs/qemu-guest-agent:${{ steps.qemu-version.outputs.version }}
